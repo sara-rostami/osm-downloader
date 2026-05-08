@@ -221,5 +221,6 @@ __marimo__/
 # OSM Downloader specific (داده‌های دانلود شده)
 downloads/
 *.osm
+!data.osm
 *.geojson
 *.pbf
