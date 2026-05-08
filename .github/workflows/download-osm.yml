@@ -1,0 +1,74 @@
+# نام کاری که در تب Actions گیت‌هاب顯示 می‌شود
+name: Download OSM Data by Bounding Box
+
+# مشخص می‌کند که این کار به صورت دستی اجرا می‌شود
+on:
+  workflow_dispatch:
+    # در اینجا ورودی‌هایی که در فرم گیت‌هاب ظاهر می‌شوند را تعریف می‌کنیم
+    inputs:
+      min_lon:
+        description: 'حداقل طول جغرافیایی (Longitude) - غربی ترین نقطه'
+        required: true
+        default: '51.338'
+        type: string
+      min_lat:
+        description: 'حداقل عرض جغرافیایی (Latitude) - جنوبی ترین نقطه'
+        required: true
+        default: '35.699'
+        type: string
+      max_lon:
+        description: 'حداکثر طول جغرافیایی (Longitude) - شرقی ترین نقطه'
+        required: true
+        default: '51.345'
+        type: string
+      max_lat:
+        description: 'حداکثر عرض جغرافیایی (Latitude) - شمالی ترین نقطه'
+        required: true
+        default: '35.703'
+        type: string
+
+# تعریف وظایف (Jobs) که قرار است اجرا شوند
+jobs:
+  download_osm:
+    # اجرا روی آخرین نسخه Ubuntu
+    runs-on: ubuntu-latest
+    # مراحل اجرا
+    steps:
+      # گام ۱: دریافت کدهای مخزن (برای دسترسی به محتوا)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # گام ۲: راه‌اندازی پایتون نسخه ۳٫۱۰
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # گام ۳: نصب کتابخانه های مورد نیاز (overpy و requests)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install overpy requests
+
+      # گام ۴: اجرای اسکریپت دانلود (با ارسال ورودی ها)
+      - name: Download OSM data
+        run: |
+          python .github/scripts/download_osm.py \
+            --min-lon ${{ github.event.inputs.min_lon }} \
+            --min-lat ${{ github.event.inputs.min_lat }} \
+            --max-lon ${{ github.event.inputs.max_lon }} \
+            --max-lat ${{ github.event.inputs.max_lat }}
+        env:
+          # یک شناسه User-Agent سفارشی برای درخواست‌هایمان تنظیم می‌کنیم
+          OVERPASS_USER_AGENT: "GitHubAction-OSMDownloader/1.0"
+
+      # گام ۵: ذخیره فایل خروجی به عنوان Artifact برای دانلود
+      - name: Upload OSM file
+        uses: actions/upload-artifact@v4
+        with:
+          # نام Artifact
+          name: downloaded-osm-data
+          # مسیر فایلی که قرار است ذخیره شود
+          path: downloaded_data.osm
+          # مدت زمان نگهداری فایل (۹۰ روز)
+          retention-days: 90
