@@ -1,57 +1,103 @@
-# گام ۴: اجرای اسکریپت پایتون توکار
-- name: Download OSM data
-  run: |
-    python -c "
-import argparse
-import sys
+name: Download OSM Data by Bounding Box
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_lon:
+        description: 'حداقل طول جغرافیایی (Longitude) - غربی ترین نقطه'
+        required: true
+        default: '51.338'
+      min_lat:
+        description: 'حداقل عرض جغرافیایی (Latitude) - جنوبی ترین نقطه'
+        required: true
+        default: '35.699'
+      max_lon:
+        description: 'حداکثر طول جغرافیایی (Longitude) - شرقی ترین نقطه'
+        required: true
+        default: '51.345'
+      max_lat:
+        description: 'حداکثر عرض جغرافیایی (Latitude) - شمالی ترین نقطه'
+        required: true
+        default: '35.703'
+
+jobs:
+  download_osm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Download OSM data using embedded Python script
+        env:
+          MIN_LON: ${{ github.event.inputs.min_lon }}
+          MIN_LAT: ${{ github.event.inputs.min_lat }}
+          MAX_LON: ${{ github.event.inputs.max_lon }}
+          MAX_LAT: ${{ github.event.inputs.max_lat }}
+          OVERPASS_USER_AGENT: "GitHubAction-OSMDownloader/1.0 (https://github.com/YOUR_USERNAME/osm-downloader)"
+        run: |
+          python -c "
 import os
+import sys
 import requests
 
-DEFAULT_USER_AGENT = 'GitHubAction-OSMDownloader/1.0'
-
-def build_overpass_query(min_lon, min_lat, max_lon, max_lat):
+def build_query(min_lon, min_lat, max_lon, max_lat):
     bbox = f'({min_lat},{min_lon},{max_lat},{max_lon})'
-    query = f'''
-    [out:xml][timeout:300];
-    (
-      node{bbox};
-      way{bbox};
-      relation{bbox};
-    );
-    out body;
-    '''
-    return query
+    return f'''[out:xml][timeout:300];
+(
+  node{bbox};
+  way{bbox};
+  relation{bbox};
+);
+out body;'''
 
-def download_osm_file(min_lon, min_lat, max_lon, max_lat, output_file):
-    query = build_overpass_query(min_lon, min_lat, max_lon, max_lat)
-    user_agent = os.environ.get('OVERPASS_USER_AGENT', DEFAULT_USER_AGENT)
-    headers = {'User-Agent': user_agent}
-    print(f'[INFO] Sending request to Overpass API for bounding box: {min_lon}, {min_lat}, {max_lon}, {max_lat}')
-    resp = requests.post('https://overpass-api.de/api/interpreter', data={'data': query}, headers=headers, timeout=300)
-    resp.raise_for_status()
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(resp.text)
-    print(f'[SUCCESS] OSM data saved to {output_file}')
-    return True
-
-def main():
-    # خواندن ورودی از متغیرهای محیطی به جای argparse (برای سادگی در این روش)
+def download_osm():
     min_lon = float(os.environ['MIN_LON'])
     min_lat = float(os.environ['MIN_LAT'])
     max_lon = float(os.environ['MAX_LON'])
     max_lat = float(os.environ['MAX_LAT'])
-    output_file = 'downloaded_data.osm'
-    if download_osm_file(min_lon, min_lat, max_lon, max_lat, output_file):
-        print('[INFO] Success')
-    else:
+    
+    # Validation
+    if not (-180 <= min_lon <= 180) or not (-180 <= max_lon <= 180):
+        print('ERROR: Longitude out of range (-180 to 180)')
+        sys.exit(1)
+    if not (-90 <= min_lat <= 90) or not (-90 <= max_lat <= 90):
+        print('ERROR: Latitude out of range (-90 to 90)')
+        sys.exit(1)
+    if min_lat >= max_lat or min_lon >= max_lon:
+        print('ERROR: Invalid bounding box (min > max)')
+        sys.exit(1)
+    
+    query = build_query(min_lon, min_lat, max_lon, max_lat)
+    headers = {'User-Agent': os.environ.get('OVERPASS_USER_AGENT', 'OSM-Downloader')}
+    
+    print(f'Downloading OSM data for bbox: {min_lon},{min_lat} to {max_lon},{max_lat}')
+    try:
+        r = requests.post('https://overpass-api.de/api/interpreter', data={'data': query}, headers=headers, timeout=300)
+        r.raise_for_status()
+        with open('downloaded_data.osm', 'w', encoding='utf-8') as f:
+            f.write(r.text)
+        print('Success: downloaded_data.osm saved')
+    except Exception as e:
+        print(f'ERROR: {e}')
         sys.exit(1)
 
 if __name__ == '__main__':
-    main()
+    download_osm()
 "
-  env:
-    OVERPASS_USER_AGENT: "GitHubAction-OSMDownloader/1.0"
-    MIN_LON: ${{ github.event.inputs.min_lon }}
-    MIN_LAT: ${{ github.event.inputs.min_lat }}
-    MAX_LON: ${{ github.event.inputs.max_lon }}
-    MAX_LAT: ${{ github.event.inputs.max_lat }}
+
+      - name: Upload OSM file
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloaded-osm-data
+          path: downloaded_data.osm
+          retention-days: 90
