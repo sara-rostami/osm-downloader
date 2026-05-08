@@ -1,0 +1,83 @@
+name: Download OSM Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_lon:
+        description: 'حداقل طول جغرافیایی (غربی)'
+        required: true
+        default: '51.338'
+      min_lat:
+        description: 'حداقل عرض جغرافیایی (جنوبی)'
+        required: true
+        default: '35.699'
+      max_lon:
+        description: 'حداکثر طول جغرافیایی (شرقی)'
+        required: true
+        default: '51.345'
+      max_lat:
+        description: 'حداکثر عرض جغرافیایی (شمالی)'
+        required: true
+        default: '35.703'
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Run OSM downloader
+        env:
+          MIN_LON: ${{ github.event.inputs.min_lon }}
+          MIN_LAT: ${{ github.event.inputs.min_lat }}
+          MAX_LON: ${{ github.event.inputs.max_lon }}
+          MAX_LAT: ${{ github.event.inputs.max_lat }}
+        run: |
+          python -c "
+import os, sys, requests
+
+min_lon = float(os.environ['MIN_LON'])
+min_lat = float(os.environ['MIN_LAT'])
+max_lon = float(os.environ['MAX_LON'])
+max_lat = float(os.environ['MAX_LAT'])
+
+# اعتبارسنجی
+if not (-180 <= min_lon <= 180) or not (-180 <= max_lon <= 180):
+    sys.exit('ERROR: Longitude out of range')
+if not (-90 <= min_lat <= 90) or not (-90 <= max_lat <= 90):
+    sys.exit('ERROR: Latitude out of range')
+if min_lat >= max_lat or min_lon >= max_lon:
+    sys.exit('ERROR: Invalid bbox')
+
+bbox = f'({min_lat},{min_lon},{max_lat},{max_lon})'
+query = f\"\"\"[out:xml][timeout:300];
+(
+  node{bbox};
+  way{bbox};
+  relation{bbox};
+);
+out body;\"
+
+headers = {'User-Agent': 'OSM-Downloader-GitHub-Action/1.0'}
+r = requests.post('https://overpass-api.de/api/interpreter', data={'data': query}, headers=headers, timeout=300)
+r.raise_for_status()
+with open('data.osm', 'w', encoding='utf-8') as f:
+    f.write(r.text)
+print('✅ فایل data.osm با موفقیت ذخیره شد')
+"
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: osm-data
+          path: data.osm
+          retention-days: 90
