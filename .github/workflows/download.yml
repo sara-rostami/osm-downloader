@@ -1,0 +1,36 @@
+name: Simple OSM Download
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_lon:
+        description: 'Longitude min'
+        required: true
+        default: '51.338'
+      min_lat:
+        description: 'Latitude min'
+        required: true
+        default: '35.699'
+      max_lon:
+        description: 'Longitude max'
+        required: true
+        default: '51.345'
+      max_lat:
+        description: 'Latitude max'
+        required: true
+        default: '35.703'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run a simple command
+        run: echo "Workflow is working!"
+      - name: Show inputs
+        run: |
+          echo "min_lon: ${{ github.event.inputs.min_lon }}"
+          echo "min_lat: ${{ github.event.inputs.min_lat }}"
+          echo "max_lon: ${{ github.event.inputs.max_lon }}"
+          echo "max_lat: ${{ github.event.inputs.max_lat }}"
