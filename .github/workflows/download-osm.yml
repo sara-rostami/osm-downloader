@@ -1,74 +1,57 @@
-# نام کاری که در تب Actions گیت‌هاب顯示 می‌شود
-name: Download OSM Data by Bounding Box
+# گام ۴: اجرای اسکریپت پایتون توکار
+- name: Download OSM data
+  run: |
+    python -c "
+import argparse
+import sys
+import os
+import requests
 
-# مشخص می‌کند که این کار به صورت دستی اجرا می‌شود
-on:
-  workflow_dispatch:
-    # در اینجا ورودی‌هایی که در فرم گیت‌هاب ظاهر می‌شوند را تعریف می‌کنیم
-    inputs:
-      min_lon:
-        description: 'حداقل طول جغرافیایی (Longitude) - غربی ترین نقطه'
-        required: true
-        default: '51.338'
-        type: string
-      min_lat:
-        description: 'حداقل عرض جغرافیایی (Latitude) - جنوبی ترین نقطه'
-        required: true
-        default: '35.699'
-        type: string
-      max_lon:
-        description: 'حداکثر طول جغرافیایی (Longitude) - شرقی ترین نقطه'
-        required: true
-        default: '51.345'
-        type: string
-      max_lat:
-        description: 'حداکثر عرض جغرافیایی (Latitude) - شمالی ترین نقطه'
-        required: true
-        default: '35.703'
-        type: string
+DEFAULT_USER_AGENT = 'GitHubAction-OSMDownloader/1.0'
 
-# تعریف وظایف (Jobs) که قرار است اجرا شوند
-jobs:
-  download_osm:
-    # اجرا روی آخرین نسخه Ubuntu
-    runs-on: ubuntu-latest
-    # مراحل اجرا
-    steps:
-      # گام ۱: دریافت کدهای مخزن (برای دسترسی به محتوا)
-      - name: Checkout code
-        uses: actions/checkout@v4
+def build_overpass_query(min_lon, min_lat, max_lon, max_lat):
+    bbox = f'({min_lat},{min_lon},{max_lat},{max_lon})'
+    query = f'''
+    [out:xml][timeout:300];
+    (
+      node{bbox};
+      way{bbox};
+      relation{bbox};
+    );
+    out body;
+    '''
+    return query
 
-      # گام ۲: راه‌اندازی پایتون نسخه ۳٫۱۰
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+def download_osm_file(min_lon, min_lat, max_lon, max_lat, output_file):
+    query = build_overpass_query(min_lon, min_lat, max_lon, max_lat)
+    user_agent = os.environ.get('OVERPASS_USER_AGENT', DEFAULT_USER_AGENT)
+    headers = {'User-Agent': user_agent}
+    print(f'[INFO] Sending request to Overpass API for bounding box: {min_lon}, {min_lat}, {max_lon}, {max_lat}')
+    resp = requests.post('https://overpass-api.de/api/interpreter', data={'data': query}, headers=headers, timeout=300)
+    resp.raise_for_status()
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(resp.text)
+    print(f'[SUCCESS] OSM data saved to {output_file}')
+    return True
 
-      # گام ۳: نصب کتابخانه های مورد نیاز (overpy و requests)
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install overpy requests
+def main():
+    # خواندن ورودی از متغیرهای محیطی به جای argparse (برای سادگی در این روش)
+    min_lon = float(os.environ['MIN_LON'])
+    min_lat = float(os.environ['MIN_LAT'])
+    max_lon = float(os.environ['MAX_LON'])
+    max_lat = float(os.environ['MAX_LAT'])
+    output_file = 'downloaded_data.osm'
+    if download_osm_file(min_lon, min_lat, max_lon, max_lat, output_file):
+        print('[INFO] Success')
+    else:
+        sys.exit(1)
 
-      # گام ۴: اجرای اسکریپت دانلود (با ارسال ورودی ها)
-      - name: Download OSM data
-        run: |
-          python .github/scripts/download_osm.py \
-            --min-lon ${{ github.event.inputs.min_lon }} \
-            --min-lat ${{ github.event.inputs.min_lat }} \
-            --max-lon ${{ github.event.inputs.max_lon }} \
-            --max-lat ${{ github.event.inputs.max_lat }}
-        env:
-          # یک شناسه User-Agent سفارشی برای درخواست‌هایمان تنظیم می‌کنیم
-          OVERPASS_USER_AGENT: "GitHubAction-OSMDownloader/1.0"
-
-      # گام ۵: ذخیره فایل خروجی به عنوان Artifact برای دانلود
-      - name: Upload OSM file
-        uses: actions/upload-artifact@v4
-        with:
-          # نام Artifact
-          name: downloaded-osm-data
-          # مسیر فایلی که قرار است ذخیره شود
-          path: downloaded_data.osm
-          # مدت زمان نگهداری فایل (۹۰ روز)
-          retention-days: 90
+if __name__ == '__main__':
+    main()
+"
+  env:
+    OVERPASS_USER_AGENT: "GitHubAction-OSMDownloader/1.0"
+    MIN_LON: ${{ github.event.inputs.min_lon }}
+    MIN_LAT: ${{ github.event.inputs.min_lat }}
+    MAX_LON: ${{ github.event.inputs.max_lon }}
+    MAX_LAT: ${{ github.event.inputs.max_lat }}
