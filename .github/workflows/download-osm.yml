@@ -75,9 +75,22 @@ jobs:
           print('✅ فایل data.osm با موفقیت ذخیره شد')
           "
 
-      - name: Upload result
+      - name: Upload result as artifact (optional)
         uses: actions/upload-artifact@v4
         with:
           name: osm-data
           path: data.osm
           retention-days: 90
+
+      - name: Commit and push OSM file to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.osm
+          # فقط در صورتی تغییرات وجود داشت، commit کن
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add OSM data for bbox ${{ github.event.inputs.min_lon }},${{ github.event.inputs.min_lat }} to ${{ github.event.inputs.max_lon }},${{ github.event.inputs.max_lat }}"
+            git push
+          fi
