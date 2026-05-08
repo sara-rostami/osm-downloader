@@ -43,37 +43,37 @@ jobs:
           MAX_LAT: ${{ github.event.inputs.max_lat }}
         run: |
           python -c "
-import os, sys, requests
+          import os, sys, requests
 
-min_lon = float(os.environ['MIN_LON'])
-min_lat = float(os.environ['MIN_LAT'])
-max_lon = float(os.environ['MAX_LON'])
-max_lat = float(os.environ['MAX_LAT'])
+          min_lon = float(os.environ['MIN_LON'])
+          min_lat = float(os.environ['MIN_LAT'])
+          max_lon = float(os.environ['MAX_LON'])
+          max_lat = float(os.environ['MAX_LAT'])
 
-# اعتبارسنجی
-if not (-180 <= min_lon <= 180) or not (-180 <= max_lon <= 180):
-    sys.exit('ERROR: Longitude out of range')
-if not (-90 <= min_lat <= 90) or not (-90 <= max_lat <= 90):
-    sys.exit('ERROR: Latitude out of range')
-if min_lat >= max_lat or min_lon >= max_lon:
-    sys.exit('ERROR: Invalid bbox')
+          # اعتبارسنجی
+          if not (-180 <= min_lon <= 180) or not (-180 <= max_lon <= 180):
+              sys.exit('ERROR: Longitude out of range')
+          if not (-90 <= min_lat <= 90) or not (-90 <= max_lat <= 90):
+              sys.exit('ERROR: Latitude out of range')
+          if min_lat >= max_lat or min_lon >= max_lon:
+              sys.exit('ERROR: Invalid bbox')
 
-bbox = f'({min_lat},{min_lon},{max_lat},{max_lon})'
-query = f\"\"\"[out:xml][timeout:300];
-(
-  node{bbox};
-  way{bbox};
-  relation{bbox};
-);
-out body;\"
+          bbox = f'({min_lat},{min_lon},{max_lat},{max_lon})'
+          query = f\"\"\"[out:xml][timeout:300];
+          (
+            node{bbox};
+            way{bbox};
+            relation{bbox};
+          );
+          out body;\"\"\"
 
-headers = {'User-Agent': 'OSM-Downloader-GitHub-Action/1.0'}
-r = requests.post('https://overpass-api.de/api/interpreter', data={'data': query}, headers=headers, timeout=300)
-r.raise_for_status()
-with open('data.osm', 'w', encoding='utf-8') as f:
-    f.write(r.text)
-print('✅ فایل data.osm با موفقیت ذخیره شد')
-"
+          headers = {'User-Agent': 'OSM-Downloader-GitHub-Action/1.0'}
+          r = requests.post('https://overpass-api.de/api/interpreter', data={'data': query}, headers=headers, timeout=300)
+          r.raise_for_status()
+          with open('data.osm', 'w', encoding='utf-8') as f:
+              f.write(r.text)
+          print('✅ فایل data.osm با موفقیت ذخیره شد')
+          "
 
       - name: Upload result
         uses: actions/upload-artifact@v4
